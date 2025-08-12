@@ -1,0 +1,119 @@
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, real } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  walletAddress: text("wallet_address"),
+  username: text("username").notNull(),
+  email: text("email"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const cropScans = pgTable("crop_scans", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  imageUrl: text("image_url").notNull(),
+  ipfsHash: text("ipfs_hash"),
+  cropType: text("crop_type"),
+  healthStatus: text("health_status"), // 'healthy', 'diseased', 'attention_needed'
+  confidence: integer("confidence"), // 0-100
+  aiResults: jsonb("ai_results"), // Store detailed AI analysis
+  recommendations: text("recommendations"),
+  weatherData: jsonb("weather_data"),
+  paymentStatus: text("payment_status").default("free"), // 'free', 'paid', 'pending'
+  transactionHash: text("transaction_hash"),
+  nftTokenId: text("nft_token_id"), // Advisory NFT token ID
+  advisoryNFTHash: text("advisory_nft_hash"), // IPFS hash for NFT metadata
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  scanId: integer("scan_id").references(() => cropScans.id),
+  amount: integer("amount"), // in paise for INR or wei for crypto
+  currency: text("currency"), // 'INR', 'MATIC', 'ETH'
+  paymentMethod: text("payment_method"), // 'upi', 'crypto'
+  status: text("status"), // 'pending', 'completed', 'failed'
+  transactionId: text("transaction_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCropScanSchema = createInsertSchema(cropScans).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPaymentSchema = createInsertSchema(payments).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Analytics tables
+export const farmAnalytics = pgTable("farm_analytics", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  totalArea: real("total_area"), // in acres
+  totalCrops: integer("total_crops"),
+  totalScans: integer("total_scans"),
+  healthyScans: integer("healthy_scans"),
+  diseasedScans: integer("diseased_scans"),
+  totalTreatmentCost: real("total_treatment_cost"),
+  estimatedYield: real("estimated_yield"),
+  estimatedRevenue: real("estimated_revenue"),
+  lastUpdated: timestamp("last_updated").defaultNow(),
+});
+
+export const weatherHistory = pgTable("weather_history", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  location: text("location").notNull(),
+  temperature: real("temperature"),
+  humidity: real("humidity"),
+  rainfall: real("rainfall"),
+  windSpeed: real("wind_speed"),
+  date: timestamp("date").defaultNow(),
+});
+
+export const cropPrices = pgTable("crop_prices", {
+  id: serial("id").primaryKey(),
+  cropName: text("crop_name").notNull(),
+  pricePerKg: real("price_per_kg"),
+  market: text("market"),
+  state: text("state"),
+  date: timestamp("date").defaultNow(),
+});
+
+export const insertFarmAnalyticsSchema = createInsertSchema(farmAnalytics).omit({
+  id: true,
+  lastUpdated: true,
+});
+
+export const insertWeatherHistorySchema = createInsertSchema(weatherHistory).omit({
+  id: true,
+  date: true,
+});
+
+export const insertCropPricesSchema = createInsertSchema(cropPrices).omit({
+  id: true,
+  date: true,
+});
+
+export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type CropScan = typeof cropScans.$inferSelect;
+export type InsertCropScan = z.infer<typeof insertCropScanSchema>;
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type FarmAnalytics = typeof farmAnalytics.$inferSelect;
+export type InsertFarmAnalytics = z.infer<typeof insertFarmAnalyticsSchema>;
+export type WeatherHistory = typeof weatherHistory.$inferSelect;
+export type InsertWeatherHistory = z.infer<typeof insertWeatherHistorySchema>;
+export type CropPrices = typeof cropPrices.$inferSelect;
+export type InsertCropPrices = z.infer<typeof insertCropPricesSchema>;
