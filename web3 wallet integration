@@ -1,0 +1,187 @@
+import { WalletState } from '@/types';
+
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
+export class Web3Service {
+  private static instance: Web3Service;
+  
+  static getInstance(): Web3Service {
+    if (!Web3Service.instance) {
+      Web3Service.instance = new Web3Service();
+    }
+    return Web3Service.instance;
+  }
+
+  async connectWallet(): Promise<WalletState> {
+    if (!window.ethereum) {
+      throw new Error('MetaMask not installed. Please install MetaMask to use blockchain features.');
+    }
+
+    try {
+      // Request account access
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts',
+      });
+
+      if (!accounts || accounts.length === 0) {
+        throw new Error('No accounts found. Please unlock MetaMask.');
+      }
+
+      // Switch to Polygon Mumbai for testing
+      await this.switchToPolygonMumbai();
+
+      const chainId = await window.ethereum.request({
+        method: 'eth_chainId',
+      });
+
+      const balance = await window.ethereum.request({
+        method: 'eth_getBalance',
+        params: [accounts[0], 'latest'],
+      });
+
+      return {
+        isConnected: true,
+        address: accounts[0],
+        balance: this.formatBalance(balance),
+        chainId: parseInt(chainId, 16),
+      };
+    } catch (error: any) {
+      console.error('Wallet connection failed:', error);
+      
+      if (error.code === 4001) {
+        throw new Error('Connection rejected. Please approve the connection request.');
+      } else if (error.code === -32002) {
+        throw new Error('Connection request pending. Check MetaMask.');
+      }
+      throw error;
+    }
+  }
+
+  async switchToPolygonMumbai(): Promise<void> {
+    if (!window.ethereum) {
+      throw new Error('MetaMask not installed');
+    }
+
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x13881' }], // Mumbai testnet
+      });
+    } catch (switchError: any) {
+      if (switchError.code === 4902) {
+        // Add Mumbai network
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [
+            {
+              chainId: '0x13881',
+              chainName: 'Polygon Mumbai',
+              nativeCurrency: {
+                name: 'MATIC',
+                symbol: 'MATIC',
+                decimals: 18,
+              },
+              rpcUrls: ['https://rpc-mumbai.maticvigil.com/'],
+              blockExplorerUrls: ['https://mumbai.polygonscan.com/'],
+            },
+          ],
+        });
+      } else {
+        throw switchError;
+      }
+    }
+  }
+
+  async sendTransaction(to: string, amount: string): Promise<string> {
+    if (!window.ethereum) {
+      throw new Error('MetaMask not installed');
+    }
+
+    const accounts = await window.ethereum.request({
+      method: 'eth_accounts',
+    });
+
+    if (accounts.length === 0) {
+      throw new Error('No accounts connected');
+    }
+
+    const transactionParams = {
+      from: accounts[0],
+      to,
+      value: this.toWei(amount),
+      gas: '0x5208', // 21000 gas
+    };
+
+    const txHash = await window.ethereum.request({
+      method: 'eth_sendTransaction',
+      params: [transactionParams],
+    });
+
+    return txHash;
+  }
+
+  private toWei(amount: string): string {
+    // Convert ETH to Wei (18 decimals)
+    const weiAmount = parseFloat(amount) * Math.pow(10, 18);
+    return '0x' + weiAmount.toString(16);
+  }
+
+  private formatBalance(balance: string): string {
+    const balanceInEth = parseInt(balance, 16) / Math.pow(10, 18);
+    return balanceInEth.toFixed(4);
+  }
+
+  async getWalletState(): Promise<WalletState> {
+    if (!window.ethereum) {
+      return {
+        isConnected: false,
+        address: null,
+        balance: null,
+        chainId: null,
+      };
+    }
+
+    try {
+      const accounts = await window.ethereum.request({
+        method: 'eth_accounts',
+      });
+
+      if (accounts.length === 0) {
+        return {
+          isConnected: false,
+          address: null,
+          balance: null,
+          chainId: null,
+        };
+      }
+
+      const chainId = await window.ethereum.request({
+        method: 'eth_chainId',
+      });
+
+      const balance = await window.ethereum.request({
+        method: 'eth_getBalance',
+        params: [accounts[0], 'latest'],
+      });
+
+      return {
+        isConnected: true,
+        address: accounts[0],
+        balance: this.formatBalance(balance),
+        chainId: parseInt(chainId, 16),
+      };
+    } catch (error) {
+      console.error('Failed to get wallet state:', error);
+      return {
+        isConnected: false,
+        address: null,
+        balance: null,
+        chainId: null,
+      };
+    }
+  }
+}
