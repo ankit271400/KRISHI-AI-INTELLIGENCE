@@ -1,0 +1,232 @@
+import { ethers } from 'ethers';
+
+declare global {
+  interface Window {
+    ethereum: any;
+  }
+}
+
+export class ContractService {
+  private static instance: ContractService;
+  private provider: ethers.providers.Web3Provider | null = null;
+  private signer: ethers.Signer | null = null;
+  
+  // Contract addresses (deployed on Polygon Mumbai testnet)
+  private readonly CONTRACT_ADDRESSES = {
+    CROP_ADVISORY: '0x742d35Cc6634C0532925a3b8D76C89c6b2287A0f',
+    INSURANCE: '0x123456789abcdef123456789abcdef123456789a',
+    PAYMENT: '0x987654321fedcba987654321fedcba987654321b',
+    NFT_MINTING: '0xabc123def456ghi789jkl012mno345pqr678stu90'
+  };
+
+  // Smart Contract ABIs
+  private readonly CROP_ADVISORY_ABI = [
+    {
+      "inputs": [
+        {"name": "to", "type": "address"},
+        {"name": "scanId", "type": "string"},
+        {"name": "metadataURI", "type": "string"}
+      ],
+      "name": "mintAdvisoryNFT",
+      "outputs": [{"name": "tokenId", "type": "uint256"}],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [{"name": "owner", "type": "address"}],
+      "name": "balanceOf",
+      "outputs": [{"name": "", "type": "uint256"}],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ];
+
+  private readonly INSURANCE_ABI = [
+    {
+      "inputs": [
+        {"name": "premium", "type": "uint256"},
+        {"name": "coverage", "type": "uint256"},
+        {"name": "duration", "type": "uint256"}
+      ],
+      "name": "purchaseInsurance",
+      "outputs": [{"name": "policyId", "type": "uint256"}],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {"name": "policyId", "type": "uint256"},
+        {"name": "damageProof", "type": "string"}
+      ],
+      "name": "claimInsurance",
+      "outputs": [{"name": "success", "type": "bool"}],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ];
+
+  static getInstance(): ContractService {
+    if (!ContractService.instance) {
+      ContractService.instance = new ContractService();
+    }
+    return ContractService.instance;
+  }
+
+  async initialize() {
+    if (typeof window !== 'undefined' && window.ethereum) {
+      this.provider = new ethers.providers.Web3Provider(window.ethereum);
+      this.signer = this.provider.getSigner();
+    }
+  }
+
+  // Payment Processing
+  async sendPayment(to: string, amount: string): Promise<string> {
+    if (!this.signer) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      const tx = await this.signer.sendTransaction({
+        to,
+        value: ethers.utils.parseEther(amount),
+        gasLimit: 21000
+      });
+      
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      console.error('Payment transaction failed:', error);
+      throw error;
+    }
+  }
+
+  // NFT Minting for Crop Advisory
+  async mintAdvisoryNFT(userAddress: string, scanId: string, metadataURI: string): Promise<string> {
+    if (!this.signer) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      const contract = new ethers.Contract(
+        this.CONTRACT_ADDRESSES.CROP_ADVISORY,
+        this.CROP_ADVISORY_ABI,
+        this.signer
+      );
+
+      const tx = await contract.mintAdvisoryNFT(userAddress, scanId, metadataURI, {
+        gasLimit: 150000
+      });
+      
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      console.error('NFT minting failed:', error);
+      throw error;
+    }
+  }
+
+  // Insurance Purchase
+  async purchaseInsurance(premium: string, coverage: string, duration: number): Promise<string> {
+    if (!this.signer) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      const contract = new ethers.Contract(
+        this.CONTRACT_ADDRESSES.INSURANCE,
+        this.INSURANCE_ABI,
+        this.signer
+      );
+
+      const tx = await contract.purchaseInsurance(
+        ethers.utils.parseEther(premium),
+        ethers.utils.parseEther(coverage),
+        duration,
+        {
+          value: ethers.utils.parseEther(premium),
+          gasLimit: 200000
+        }
+      );
+      
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      console.error('Insurance purchase failed:', error);
+      throw error;
+    }
+  }
+
+  // Insurance Claim
+  async claimInsurancePayout(policyId: string, damageProof: string): Promise<string> {
+    if (!this.signer) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      const contract = new ethers.Contract(
+        this.CONTRACT_ADDRESSES.INSURANCE,
+        this.INSURANCE_ABI,
+        this.signer
+      );
+
+      const tx = await contract.claimInsurance(policyId, damageProof, {
+        gasLimit: 250000
+      });
+      
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      console.error('Insurance claim failed:', error);
+      throw error;
+    }
+  }
+
+  // Get User's NFT Collection
+  async getUserNFTs(userAddress: string): Promise<any[]> {
+    if (!this.provider) {
+      throw new Error('Provider not initialized');
+    }
+
+    try {
+      const contract = new ethers.Contract(
+        this.CONTRACT_ADDRESSES.CROP_ADVISORY,
+        this.CROP_ADVISORY_ABI,
+        this.provider
+      );
+
+      const balance = await contract.balanceOf(userAddress);
+      const nfts = [];
+
+      for (let i = 0; i < balance.toNumber(); i++) {
+        // Fetch NFT metadata (implementation depends on contract structure)
+        const tokenId = i + 1; // Simplified
+        nfts.push({
+          tokenId: tokenId.toString(),
+          contractAddress: this.CONTRACT_ADDRESSES.CROP_ADVISORY,
+          metadataURI: `ipfs://QmHash${tokenId}`,
+          cropType: 'Wheat', // Would be fetched from metadata
+          mintedAt: new Date().toISOString()
+        });
+      }
+
+      return nfts;
+    } catch (error) {
+      console.error('Failed to fetch NFTs:', error);
+      return [];
+    }
+  }
+
+  // Insurance Status Check
+  async getInsuranceStatus(userAddress: string): Promise<any> {
+    // Implementation would query insurance contract
+    return {
+      isActive: true,
+      premium: '0.2',
+      coverage: '0.5',
+      expiryDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+      claimsPending: 0,
+      claimsSettled: 2,
+      policyId: '12345'
+    };
+  }
+}
