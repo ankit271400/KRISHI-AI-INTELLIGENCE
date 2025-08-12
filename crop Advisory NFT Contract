@@ -1,0 +1,86 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
+
+contract CropAdvisoryNFT is ERC721, Ownable {
+    using Counters for Counters.Counter;
+    Counters.Counter private _tokenIds;
+
+    struct ScanData {
+        string scanId;
+        string cropType;
+        string healthStatus;
+        uint256 confidence;
+        string location;
+        uint256 timestamp;
+        string metadataURI;
+    }
+
+    mapping(uint256 => ScanData) public tokenData;
+    mapping(address => uint256[]) public userTokens;
+    
+    event AdvisoryNFTMinted(
+        address indexed to,
+        uint256 indexed tokenId,
+        string scanId,
+        string cropType
+    );
+
+    constructor() ERC721("KrishiAI Advisory NFT", "KRISHI") {}
+
+    function mintAdvisoryNFT(
+        address to,
+        string memory scanId,
+        string memory cropType,
+        string memory healthStatus,
+        uint256 confidence,
+        string memory location,
+        string memory metadataURI
+    ) public returns (uint256) {
+        _tokenIds.increment();
+        uint256 newTokenId = _tokenIds.current();
+
+        _mint(to, newTokenId);
+
+        tokenData[newTokenId] = ScanData({
+            scanId: scanId,
+            cropType: cropType,
+            healthStatus: healthStatus,
+            confidence: confidence,
+            location: location,
+            timestamp: block.timestamp,
+            metadataURI: metadataURI
+        });
+
+        userTokens[to].push(newTokenId);
+
+        emit AdvisoryNFTMinted(to, newTokenId, scanId, cropType);
+        
+        return newTokenId;
+    }
+
+    function tokenURI(uint256 tokenId) 
+        public 
+        view 
+        override 
+        returns (string memory) 
+    {
+        require(_exists(tokenId), "Token does not exist");
+        return tokenData[tokenId].metadataURI;
+    }
+
+    function getUserTokens(address user) 
+        public 
+        view 
+        returns (uint256[] memory) 
+    {
+        return userTokens[user];
+    }
+
+    function getTotalSupply() public view returns (uint256) {
+        return _tokenIds.current();
+    }
+}
