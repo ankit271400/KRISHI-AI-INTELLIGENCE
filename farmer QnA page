@@ -1,0 +1,387 @@
+import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
+import { apiRequest } from '@/lib/queryClient';
+import { Brain, HelpCircle, Lightbulb, BookOpen, DollarSign, CloudRain, Bug, Sprout } from 'lucide-react';
+
+interface FarmerQAResponse {
+  answer: string;
+  confidence: number;
+  sources: string[];
+  relatedQuestions: string[];
+  actionItems: string[];
+  governmentSchemes?: string[];
+}
+
+const questionCategories = [
+  { value: 'irrigation', label: '💧 सिंचाई', icon: CloudRain },
+  { value: 'seeds', label: '🌱 बीज और किस्में', icon: Sprout },
+  { value: 'weather', label: '🌤️ मौसम', icon: CloudRain },
+  { value: 'market', label: '📊 बाज़ार भाव', icon: DollarSign },
+  { value: 'finance', label: '💰 वित्तीय सहायता', icon: DollarSign },
+  { value: 'pest', label: '🐛 कीट नियंत्रण', icon: Bug },
+  { value: 'soil', label: '🌍 मिट्टी स्वास्थ्य', icon: Sprout },
+  { value: 'general', label: '❓ सामान्य', icon: HelpCircle }
+];
+
+const languages = [
+  { value: 'hindi', label: '🇮🇳 हिंदी' },
+  { value: 'punjabi', label: '🇮🇳 ਪੰਜਾਬੀ' },
+  { value: 'english', label: '🇺🇸 English' },
+  { value: 'bengali', label: '🇮🇳 বাংলা' }
+];
+
+const commonQuestions = {
+  hindi: [
+    "इस मौसम में कौन सी फसल उगाऊं?",
+    "सिंचाई कब और कितनी करूं?",
+    "PM-KISAN योजना में कैसे आवेदन करूं?",
+    "कपास में कीड़े लगे हैं, क्या करूं?",
+    "गेहूं का भाव कब बढ़ेगा?",
+    "मिट्टी में नाइट्रोजन कैसे बढ़ाऊं?"
+  ],
+  english: [
+    "Which crop should I grow this season?",
+    "When and how much to irrigate?",
+    "How to apply for PM-KISAN scheme?",
+    "Cotton crop has pest attack, what to do?",
+    "When will wheat prices increase?",
+    "How to increase nitrogen in soil?"
+  ]
+};
+
+export default function FarmerQAPage() {
+  const [question, setQuestion] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState('hindi');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [context, setContext] = useState({
+    cropType: '',
+    location: '',
+    season: '',
+    farmSize: ''
+  });
+  const [response, setResponse] = useState<FarmerQAResponse | null>(null);
+
+  const askQuestionMutation = useMutation({
+    mutationFn: async (questionData: any) => {
+      const response = await fetch('/api/farmer-qa', {
+        method: 'POST',
+        body: JSON.stringify(questionData),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      setResponse(data.answer);
+    }
+  });
+
+  const handleAskQuestion = () => {
+    if (!question.trim()) return;
+
+    const questionData = {
+      question,
+      language: selectedLanguage,
+      category: selectedCategory || undefined,
+      context: Object.keys(context).length > 0 ? context : undefined
+    };
+
+    askQuestionMutation.mutate(questionData);
+  };
+
+  const handleQuickQuestion = (quickQuestion: string) => {
+    setQuestion(quickQuestion);
+  };
+
+  const getConfidenceColor = (confidence: number) => {
+    if (confidence >= 0.8) return 'text-green-600';
+    if (confidence >= 0.6) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const getConfidenceLabel = (confidence: number) => {
+    if (confidence >= 0.8) return 'उच्च विश्वसनीयता';
+    if (confidence >= 0.6) return 'मध्यम विश्वसनीयता';
+    return 'कम विश्वसनीयता';
+  };
+
+  return (
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="text-center space-y-2">
+        <h1 className="text-3xl font-bold text-green-800 dark:text-green-400">
+          🧠 कृषि विशेषज्ञ सहायक
+        </h1>
+        <p className="text-gray-600 dark:text-gray-300">
+          खेती से जुड़े किसी भी सवाल का तुरंत जवाब पाएं - AI और सरकारी योजनाओं की जानकारी के साथ
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Question Input Form */}
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Brain className="h-5 w-5 text-blue-600" />
+                अपना प्रश्न पूछें
+              </CardTitle>
+              <CardDescription>
+                खेती, बाज़ार, सरकारी योजनाओं के बारे में कुछ भी पूछें
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Language Selection */}
+              <div className="space-y-2">
+                <Label>भाषा चुनें</Label>
+                <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
+                  <SelectTrigger data-testid="select-language">
+                    <SelectValue placeholder="भाषा चुनें" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {languages.map((lang) => (
+                      <SelectItem key={lang.value} value={lang.value}>
+                        {lang.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Category Selection */}
+              <div className="space-y-2">
+                <Label>प्रश्न की श्रेणी (वैकल्पिक)</Label>
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger data-testid="select-category">
+                    <SelectValue placeholder="श्रेणी चुनें" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {questionCategories.map((category) => (
+                      <SelectItem key={category.value} value={category.value}>
+                        {category.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Context Information */}
+              <div className="space-y-2">
+                <Label>अतिरिक्त जानकारी (वैकल्पिक)</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    placeholder="फसल का नाम"
+                    value={context.cropType}
+                    onChange={(e) => setContext(prev => ({ ...prev, cropType: e.target.value }))}
+                    data-testid="input-crop-type"
+                  />
+                  <Input
+                    placeholder="स्थान/राज्य"
+                    value={context.location}
+                    onChange={(e) => setContext(prev => ({ ...prev, location: e.target.value }))}
+                    data-testid="input-location"
+                  />
+                  <Input
+                    placeholder="मौसम (रबी/खरीफ)"
+                    value={context.season}
+                    onChange={(e) => setContext(prev => ({ ...prev, season: e.target.value }))}
+                    data-testid="input-season"
+                  />
+                  <Input
+                    placeholder="खेत का आकार (एकड़)"
+                    value={context.farmSize}
+                    onChange={(e) => setContext(prev => ({ ...prev, farmSize: e.target.value }))}
+                    data-testid="input-farm-size"
+                  />
+                </div>
+              </div>
+
+              {/* Question Input */}
+              <div className="space-y-2">
+                <Label htmlFor="question">आपका प्रश्न</Label>
+                <Textarea
+                  id="question"
+                  placeholder="यहाँ अपना प्रश्न लिखें..."
+                  rows={4}
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  data-testid="textarea-question"
+                />
+              </div>
+
+              <Button 
+                onClick={handleAskQuestion}
+                disabled={!question.trim() || askQuestionMutation.isPending}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+                data-testid="button-ask-question"
+              >
+                {askQuestionMutation.isPending ? 'जवाब मिल रहा है...' : '🔍 जवाब पाएं'}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Answer Display */}
+          {response && (
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Lightbulb className="h-5 w-5 text-yellow-600" />
+                    विशेषज्ञ की सलाह
+                  </span>
+                  <Badge variant={response.confidence >= 0.7 ? "default" : "secondary"}>
+                    {getConfidenceLabel(response.confidence)}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                  <p className="text-green-800 dark:text-green-200 leading-relaxed">
+                    {response.answer}
+                  </p>
+                </div>
+
+                {/* Action Items */}
+                {response.actionItems && response.actionItems.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                      ✅ तुरंत करने योग्य कार्य
+                    </h4>
+                    <ul className="space-y-1">
+                      {response.actionItems.map((item, index) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <span className="text-green-600 font-bold">•</span>
+                          <span className="text-sm">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Government Schemes */}
+                {response.governmentSchemes && response.governmentSchemes.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                      🏛️ संबंधित सरकारी योजनाएं
+                    </h4>
+                    <div className="space-y-1">
+                      {response.governmentSchemes.map((scheme, index) => (
+                        <Badge key={index} variant="outline" className="mr-2 mb-1">
+                          {scheme}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Related Questions */}
+                {response.relatedQuestions && response.relatedQuestions.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold mb-2">🔗 संबंधित प्रश्न</h4>
+                    <div className="space-y-1">
+                      {response.relatedQuestions.map((relatedQ, index) => (
+                        <Button
+                          key={index}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleQuickQuestion(relatedQ)}
+                          className="text-left justify-start h-auto p-2 text-blue-600 hover:text-blue-800"
+                          data-testid={`button-related-question-${index}`}
+                        >
+                          <HelpCircle className="h-3 w-3 mr-1 flex-shrink-0" />
+                          {relatedQ}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sources */}
+                <div className="text-xs text-gray-500 border-t pt-2">
+                  <span className="font-semibold">स्रोत: </span>
+                  {response.sources.join(', ')}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Quick Questions Sidebar */}
+        <div className="space-y-6">
+          {/* Common Questions */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-purple-600" />
+                आम सवाल
+              </CardTitle>
+              <CardDescription>
+                अक्सर पूछे जाने वाले प्रश्न
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {commonQuestions[selectedLanguage as keyof typeof commonQuestions]?.map((commonQ, index) => (
+                <Button
+                  key={index}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleQuickQuestion(commonQ)}
+                  className="w-full text-left justify-start h-auto p-2 text-sm"
+                  data-testid={`button-common-question-${index}`}
+                >
+                  <HelpCircle className="h-3 w-3 mr-2 flex-shrink-0" />
+                  {commonQ}
+                </Button>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Category Quick Access */}
+          <Card>
+            <CardHeader>
+              <CardTitle>📁 श्रेणी के अनुसार</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {questionCategories.map((category) => {
+                const IconComponent = category.icon;
+                return (
+                  <Button
+                    key={category.value}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedCategory(category.value)}
+                    className="w-full justify-start"
+                    data-testid={`button-category-${category.value}`}
+                  >
+                    <IconComponent className="h-4 w-4 mr-2" />
+                    {category.label}
+                  </Button>
+                );
+              })}
+            </CardContent>
+          </Card>
+
+          {/* Tips */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-yellow-700 dark:text-yellow-300">💡 सुझाव</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm space-y-2">
+              <p>• विस्तार से प्रश्न पूछें</p>
+              <p>• फसल और स्थान का नाम बताएं</p>
+              <p>• मौसम की जानकारी दें</p>
+              <p>• सरकारी योजनाओं के बारे में पूछें</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
