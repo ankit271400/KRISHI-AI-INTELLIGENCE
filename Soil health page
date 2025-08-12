@@ -1,0 +1,401 @@
+import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { apiRequest } from '@/lib/queryClient';
+import { AlertTriangle, CheckCircle, Droplets, Leaf, TrendingUp, MapPin } from 'lucide-react';
+
+interface SoilData {
+  pH: number;
+  nitrogen: number;
+  phosphorus: number;
+  potassium: number;
+  organicMatter: number;
+  moisture: number;
+  temperature: number;
+  region: string;
+}
+
+interface SoilAnalysisResult {
+  healthScore: number;
+  recommendations: string[];
+  suitableCrops: string[];
+  fertilizer: {
+    organic: string[];
+    chemical: string[];
+  };
+  irrigation: {
+    frequency: string;
+    amount: string;
+    method: string;
+  };
+  alerts: string[];
+}
+
+export default function SoilHealthPage() {
+  const [soilData, setSoilData] = useState<SoilData>({
+    pH: 7.0,
+    nitrogen: 200,
+    phosphorus: 20,
+    potassium: 150,
+    organicMatter: 1.5,
+    moisture: 25,
+    temperature: 25,
+    region: ''
+  });
+
+  const [analysisResult, setAnalysisResult] = useState<SoilAnalysisResult | null>(null);
+
+  const soilAnalysisMutation = useMutation({
+    mutationFn: async (data: SoilData) => {
+      const response = await fetch('/api/soil-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      });
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      setAnalysisResult(data.soilAnalysis);
+    }
+  });
+
+  const handleAnalyze = () => {
+    soilAnalysisMutation.mutate(soilData);
+  };
+
+  const handleInputChange = (field: keyof SoilData, value: string) => {
+    setSoilData(prev => ({
+      ...prev,
+      [field]: field === 'region' ? value : parseFloat(value) || 0
+    }));
+  };
+
+  const getHealthScoreColor = (score: number) => {
+    if (score >= 80) return 'text-green-600';
+    if (score >= 60) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const getHealthScoreLabel = (score: number) => {
+    if (score >= 80) return 'उत्कृष्ट';
+    if (score >= 60) return 'अच्छा';
+    if (score >= 40) return 'औसत';
+    return 'सुधार की आवश्यकता';
+  };
+
+  return (
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="text-center space-y-2">
+        <h1 className="text-3xl font-bold text-green-800 dark:text-green-400">
+          🌱 मिट्टी स्वास्थ्य विश्लेषण
+        </h1>
+        <p className="text-gray-600 dark:text-gray-300">
+          अपनी मिट्टी का विस्तृत विश्लेषण करें और बेहतर फसल के लिए सुझाव पाएं
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Input Form */}
+        <div className="lg:col-span-1">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Leaf className="h-5 w-5 text-green-600" />
+                मिट्टी की जानकारी दर्ज करें
+              </CardTitle>
+              <CardDescription>
+                अपनी मिट्टी के पैरामीटर दर्ज करें
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="pH">pH स्तर (4.0 - 9.0)</Label>
+                <Input
+                  id="pH"
+                  type="number"
+                  step="0.1"
+                  min="4"
+                  max="9"
+                  value={soilData.pH}
+                  onChange={(e) => handleInputChange('pH', e.target.value)}
+                  data-testid="input-ph"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="nitrogen">नाइट्रोजन (kg/ha)</Label>
+                <Input
+                  id="nitrogen"
+                  type="number"
+                  min="0"
+                  value={soilData.nitrogen}
+                  onChange={(e) => handleInputChange('nitrogen', e.target.value)}
+                  data-testid="input-nitrogen"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="phosphorus">फास्फोरस (kg/ha)</Label>
+                <Input
+                  id="phosphorus"
+                  type="number"
+                  min="0"
+                  value={soilData.phosphorus}
+                  onChange={(e) => handleInputChange('phosphorus', e.target.value)}
+                  data-testid="input-phosphorus"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="potassium">पोटाश (kg/ha)</Label>
+                <Input
+                  id="potassium"
+                  type="number"
+                  min="0"
+                  value={soilData.potassium}
+                  onChange={(e) => handleInputChange('potassium', e.target.value)}
+                  data-testid="input-potassium"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="organicMatter">जैविक पदार्थ (%)</Label>
+                <Input
+                  id="organicMatter"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={soilData.organicMatter}
+                  onChange={(e) => handleInputChange('organicMatter', e.target.value)}
+                  data-testid="input-organic-matter"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="moisture">नमी (%)</Label>
+                <Input
+                  id="moisture"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={soilData.moisture}
+                  onChange={(e) => handleInputChange('moisture', e.target.value)}
+                  data-testid="input-moisture"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="temperature">तापमान (°C)</Label>
+                <Input
+                  id="temperature"
+                  type="number"
+                  min="0"
+                  value={soilData.temperature}
+                  onChange={(e) => handleInputChange('temperature', e.target.value)}
+                  data-testid="input-temperature"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="region">क्षेत्र/राज्य</Label>
+                <Input
+                  id="region"
+                  placeholder="जैसे: पंजाब, हरियाणा, UP"
+                  value={soilData.region}
+                  onChange={(e) => handleInputChange('region', e.target.value)}
+                  data-testid="input-region"
+                />
+              </div>
+
+              <Button 
+                onClick={handleAnalyze}
+                disabled={soilAnalysisMutation.isPending}
+                className="w-full bg-green-600 hover:bg-green-700"
+                data-testid="button-analyze"
+              >
+                {soilAnalysisMutation.isPending ? 'विश्लेषण हो रहा है...' : '🔍 मिट्टी का विश्लेषण करें'}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Analysis Results */}
+        <div className="lg:col-span-2">
+          {analysisResult && (
+            <div className="space-y-6">
+              {/* Health Score Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>मिट्टी स्वास्थ्य स्कोर</span>
+                    <Badge variant={analysisResult.healthScore >= 70 ? "default" : "destructive"}>
+                      {getHealthScoreLabel(analysisResult.healthScore)}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="text-center">
+                      <div className={`text-4xl font-bold ${getHealthScoreColor(analysisResult.healthScore)}`}>
+                        {analysisResult.healthScore}/100
+                      </div>
+                    </div>
+                    <Progress 
+                      value={analysisResult.healthScore} 
+                      className="h-3"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Alerts */}
+              {analysisResult.alerts.length > 0 && (
+                <div className="space-y-2">
+                  {analysisResult.alerts.map((alert, index) => (
+                    <Alert key={index} variant="destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>{alert}</AlertDescription>
+                    </Alert>
+                  ))}
+                </div>
+              )}
+
+              {/* Detailed Analysis */}
+              <Tabs defaultValue="recommendations" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="recommendations">सुझाव</TabsTrigger>
+                  <TabsTrigger value="crops">उपयुक्त फसलें</TabsTrigger>
+                  <TabsTrigger value="fertilizer">खाद सलाह</TabsTrigger>
+                  <TabsTrigger value="irrigation">सिंचाई योजना</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="recommendations" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <CheckCircle className="h-5 w-5 text-green-600" />
+                        मिट्टी सुधार सुझाव
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2">
+                        {analysisResult.recommendations.map((recommendation, index) => (
+                          <li key={index} className="flex items-start gap-2">
+                            <span className="text-green-600 font-bold">•</span>
+                            <span>{recommendation}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="crops" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Leaf className="h-5 w-5 text-green-600" />
+                        उपयुक्त फसलें
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {analysisResult.suitableCrops.map((crop, index) => (
+                          <Badge key={index} variant="outline" className="justify-center p-2">
+                            {crop}
+                          </Badge>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="fertilizer" className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-green-700">🌿 जैविक खाद</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-1">
+                          {analysisResult.fertilizer.organic.map((item, index) => (
+                            <li key={index} className="text-sm">{item}</li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-blue-700">⚗️ रासायनिक खाद</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-1">
+                          {analysisResult.fertilizer.chemical.map((item, index) => (
+                            <li key={index} className="text-sm">{item}</li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="irrigation" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Droplets className="h-5 w-5 text-blue-600" />
+                        सिंचाई योजना
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                          <div className="font-semibold text-blue-700 dark:text-blue-300">आवृत्ति</div>
+                          <div className="text-sm">{analysisResult.irrigation.frequency}</div>
+                        </div>
+                        <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                          <div className="font-semibold text-green-700 dark:text-green-300">मात्रा</div>
+                          <div className="text-sm">{analysisResult.irrigation.amount}</div>
+                        </div>
+                        <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                          <div className="font-semibold text-purple-700 dark:text-purple-300">विधि</div>
+                          <div className="text-sm">{analysisResult.irrigation.method}</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+
+          {!analysisResult && (
+            <Card className="h-full flex items-center justify-center">
+              <CardContent className="text-center space-y-4">
+                <div className="text-6xl">🌱</div>
+                <div className="text-xl font-semibold text-gray-600 dark:text-gray-300">
+                  मिट्टी विश्लेषण के लिए तैयार
+                </div>
+                <p className="text-gray-500 dark:text-gray-400">
+                  बाएं तरफ अपनी मिट्टी की जानकारी दर्ज करें और विश्लेषण शुरू करें
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
